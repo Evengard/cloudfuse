@@ -382,6 +382,9 @@ int cloudfs_list_directory_internal(const char *path, dir_entry **dir_list)
         de->last_modified = time(NULL);
         if (is_container || is_subdir)
           de->content_type = strdup("application/directory");
+		  
+        // Sometimes we receive some empty tags (?), if it is so we just ignore them
+        int initialized = 0;
         for (anode = onode->children; anode; anode = anode->next)
         {
           char *content = "<?!?>";
@@ -400,6 +403,9 @@ int cloudfs_list_directory_internal(const char *path, dir_entry **dir_list)
             de->marker = strdup(de->name);
             if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
               de->full_name = NULL;
+			  
+            // Every entry should have a name, so it is here we will set the initialized flag
+            initialized = 1;
           }
           if (!strcasecmp((const char *)anode->name, "bytes"))
             de->size = strtoll(content, NULL, 10);
@@ -416,6 +422,13 @@ int cloudfs_list_directory_internal(const char *path, dir_entry **dir_list)
             strptime(content, "%FT%T", &last_modified);
             de->last_modified = mktime(&last_modified);
           }
+        }
+        
+        // Discarding invalid items
+        if (!initialized)
+        {
+          debugf("Invalid item, discarding!");
+          continue;
         }
         de->isdir = de->content_type &&
             ((strstr(de->content_type, "application/folder") != NULL) ||
